@@ -84,3 +84,73 @@ order by department, bucket_start
   series=Department
   sort=false
 />
+
+```department_summaries
+with parsed as (
+  select
+    department,
+    "employee name" as employee,
+    try_cast(replace(salaries, ',', '') as double)             as base_salary,
+    try_cast(replace(overtime, ',', '') as double)             as overtime,
+    try_cast(replace("other salaries", ',', '') as double)     as other_salaries,
+    try_cast(replace("total salary", ',', '') as double)       as total_salary,
+    try_cast(replace("total benefits", ',', '') as double)     as total_benefits,
+    try_cast(replace("total compensation", ',', '') as double) as total_comp,
+    try_cast(replace(hours, ',', '') as double)                as hours
+  from sf.employee_compensation
+  where "year type" = 'Fiscal'
+    and year = 2026
+),
+
+per_employee as (
+  select
+    department,
+    employee,
+    sum(base_salary)    as base_salary,
+    sum(overtime)       as overtime,
+    sum(other_salaries) as other_salaries,
+    sum(total_salary)   as total_salary,
+    sum(total_benefits) as total_benefits,
+    sum(total_comp)     as total_comp,
+    sum(hours)          as hours
+  from parsed
+  group by department, employee
+)
+
+select
+  department,
+  count(*)                                             as employees,
+  sum(total_comp)                                      as total_comp_cost,
+  avg(total_comp)                                      as avg_total_comp,
+  median(total_comp)                                   as median_total_comp,
+  quantile_cont(total_comp, 0.25)                      as p25_total_comp,
+  quantile_cont(total_comp, 0.75)                      as p75_total_comp,
+  max(total_comp)                                      as max_total_comp,
+  avg(base_salary)                                     as avg_base_salary,
+  avg(total_salary)                                    as avg_total_salary,
+  avg(overtime)                                        as avg_overtime,
+  sum(overtime) / nullif(sum(total_salary), 0)         as overtime_pct_of_pay,
+  avg(total_benefits)                                  as avg_benefits,
+  sum(total_benefits) / nullif(sum(total_comp), 0)     as benefits_pct_of_comp,
+  avg(hours)                                           as avg_hours
+from per_employee
+where total_comp > 0
+group by department
+order by employees desc
+```
+
+<DataTable data={department_summaries} search=true rows=25 sort="median_total_comp desc">
+  <Column id=Department />
+  <Column id=employees fmt=num0 />
+  <Column id=total_comp_cost title="Total Comp Cost" fmt=usd0 />
+  <Column id=median_total_comp title="Median Comp" fmt=usd0 contentType=colorscale />
+  <Column id=avg_total_comp title="Avg Comp" fmt=usd0 />
+  <Column id=p25_total_comp title="25th Pct" fmt=usd0 />
+  <Column id=p75_total_comp title="75th Pct" fmt=usd0 />
+  <Column id=max_total_comp title="Max Comp" fmt=usd0 />
+  <Column id=avg_base_salary title="Avg Base Salary" fmt=usd0 />
+  <Column id=avg_overtime title="Avg Overtime" fmt=usd0 />
+  <Column id=overtime_pct_of_pay title="OT % of Pay" fmt=pct1 />
+  <Column id=benefits_pct_of_comp title="Benefits % of Comp" fmt=pct1 />
+  <Column id=avg_hours title="Avg Hours" fmt=num0 />
+</DataTable>
