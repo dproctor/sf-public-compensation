@@ -10,18 +10,35 @@ title: SF public compensation
 ```sql current_employee_comp
   select
     department,
+    job,
     "employee name" as employee,
+    try_cast(replace("total compensation", ',', '') as double) as total_comp,
     try_cast(replace(salaries, ',', '') as double)             as base_salary,
     try_cast(replace(overtime, ',', '') as double)             as overtime,
     try_cast(replace("other salaries", ',', '') as double)     as other_salaries,
     try_cast(replace("total salary", ',', '') as double)       as total_salary,
     try_cast(replace("total benefits", ',', '') as double)     as total_benefits,
-    try_cast(replace("total compensation", ',', '') as double) as total_comp,
     try_cast(replace(hours, ',', '') as double)                as hours
   from sf.employee_compensation
   where "year type" = 'Fiscal'
     and year = 2026
 ```
+
+```sql total_comp_all_employees
+select sum(total_comp)
+from ${current_employee_comp}
+```
+
+```sql total_employees
+select count(total_comp)::integer as employee_count
+from ${current_employee_comp}
+```
+
+In 2026, San Francisco paid $<Value data={total_comp_all_employees} /> in total compensation to its <Value data={total_employees} /> employees.
+
+## Top employee compensation
+
+Many of these employees were very well compensated. Most of the top paid employees are in the Sheriff, Police, Public Health, Fire, and Retirement System Departments.
 
 ```sql top_compensation
 select *
@@ -31,6 +48,8 @@ limit 500
 ```
 
 <DataTable data={top_compensation} search=true rows=50 />
+
+## Departments
 
 ```sql histogram
 
@@ -70,21 +89,6 @@ order by department, bucket_start
 />
 
 ```department_summaries
-with per_employee as (
-  select
-    department,
-    employee,
-    sum(base_salary)    as base_salary,
-    sum(overtime)       as overtime,
-    sum(other_salaries) as other_salaries,
-    sum(total_salary)   as total_salary,
-    sum(total_benefits) as total_benefits,
-    sum(total_comp)     as total_comp,
-    sum(hours)          as hours
-  from ${current_employee_comp}
-  group by department, employee
-)
-
 select
   department,
   count(*)                                             as employees,
@@ -101,10 +105,10 @@ select
   avg(total_benefits)                                  as avg_benefits,
   sum(total_benefits) / nullif(sum(total_comp), 0)     as benefits_pct_of_comp,
   avg(hours)                                           as avg_hours
-from per_employee
+from ${current_employee_comp}
 where total_comp > 0
 group by department
-order by employees desc
+order by median_total_comp desc
 ```
 
 <DataTable data={department_summaries} search=true rows=25 sort="median_total_comp desc">
