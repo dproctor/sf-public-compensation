@@ -8,6 +8,7 @@ title: SF public compensation
 </p>
 
 ```sql current_employee_comp
+with parsed as (
   select
     department,
     job,
@@ -22,6 +23,9 @@ title: SF public compensation
   from sf.employee_compensation
   where "year type" = 'Fiscal'
     and year = 2026
+)
+select *
+from parsed
 ```
 
 ```sql total_comp_all_employees
