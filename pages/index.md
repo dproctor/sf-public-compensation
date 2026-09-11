@@ -7,52 +7,38 @@ title: SF public compensation
   data as of 2026-08-14.
 </p>
 
+```sql current_employee_comp
+  select
+    department,
+    "employee name" as employee,
+    try_cast(replace(salaries, ',', '') as double)             as base_salary,
+    try_cast(replace(overtime, ',', '') as double)             as overtime,
+    try_cast(replace("other salaries", ',', '') as double)     as other_salaries,
+    try_cast(replace("total salary", ',', '') as double)       as total_salary,
+    try_cast(replace("total benefits", ',', '') as double)     as total_benefits,
+    try_cast(replace("total compensation", ',', '') as double) as total_comp,
+    try_cast(replace(hours, ',', '') as double)                as hours
+  from sf.employee_compensation
+  where "year type" = 'Fiscal'
+    and year = 2026
+```
+
 ```sql top_compensation
-select
-  Department,
-  Job,
-  "Employee Name",
-  try_cast(replace("total compensation", ',', '') as double) as "Total Compensation",
-  Salaries,
-  Overtime,
-  "Other Salaries",
-  "Total Salary",
-  Retirement,
-  "Health and Dental",
-  "Other Benefits",
-  "Total Benefits",
-from sf.employee_compensation
-where "year type" = 'Fiscal'
-    and year = (
-      select max(year)
-      from sf.employee_compensation
-      where "year type" = 'Fiscal'
-    )
-order by "Total Compensation" desc
+select *
+from ${current_employee_comp}
+order by total_comp desc
 limit 500
 ```
 
 <DataTable data={top_compensation} search=true rows=50 />
 
 ```sql histogram
-with comp as (
-  select
-    department,
-    try_cast(replace("total compensation", ',', '') as double) as total_comp
-  from sf.employee_compensation
-  where "year type" = 'Fiscal'
-    and year = (
-      select max(year)
-      from sf.employee_compensation
-      where "year type" = 'Fiscal'
-    )
-),
 
-bucketed as (
+with bucketed as (
   select
     department,
     floor(total_comp / 50000) * 50000 as bucket_start
-  from comp
+  from ${current_employee_comp}
   where total_comp is not null
     and total_comp >= 0
 ),
@@ -69,8 +55,6 @@ counts as (
 select
   department,
   bucket_start,
-  '$' || cast(bucket_start / 1000 as integer) || 'k – $'
-      || cast((bucket_start + 50000) / 1000 as integer) || 'k' as bucket_label,
   employees,
   employees * 1.0 / sum(employees) over (partition by department) as pct_of_department
 from counts
@@ -86,23 +70,7 @@ order by department, bucket_start
 />
 
 ```department_summaries
-with parsed as (
-  select
-    department,
-    "employee name" as employee,
-    try_cast(replace(salaries, ',', '') as double)             as base_salary,
-    try_cast(replace(overtime, ',', '') as double)             as overtime,
-    try_cast(replace("other salaries", ',', '') as double)     as other_salaries,
-    try_cast(replace("total salary", ',', '') as double)       as total_salary,
-    try_cast(replace("total benefits", ',', '') as double)     as total_benefits,
-    try_cast(replace("total compensation", ',', '') as double) as total_comp,
-    try_cast(replace(hours, ',', '') as double)                as hours
-  from sf.employee_compensation
-  where "year type" = 'Fiscal'
-    and year = 2026
-),
-
-per_employee as (
+with per_employee as (
   select
     department,
     employee,
@@ -113,7 +81,7 @@ per_employee as (
     sum(total_benefits) as total_benefits,
     sum(total_comp)     as total_comp,
     sum(hours)          as hours
-  from parsed
+  from ${current_employee_comp}
   group by department, employee
 )
 
